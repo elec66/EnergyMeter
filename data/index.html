@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Energy Meter</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0d0d;--surface:#1a1a1a;--surface2:#242424;
+  --border:#333;--text:#f0e6d3;--text2:#d4d0ca;
+  --accent:#ff8c00;--green:#4caf7d;--red:#f25f5c;
+  --warn:#ffb300;--blue:#5bc0de
+}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;font-size:13px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px}
+.card-title{font-size:18px;font-weight:700;letter-spacing:1px;color:var(--text2);text-transform:uppercase;margin-bottom:12px}
+
+/* Standard-Reihe (z. B. für Sollwerte) */
+.row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)}
+
+/* Neue Struktur für Messwert-Reihen */
+.data-row {
+  display: grid;
+  grid-template-columns: 1fr auto 50px; /* Links, Wert-Rechts, Einheit-Rechts */
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.data-row label:first-child { text-align: left; }
+.data-value { text-align: right; }
+.data-unit { text-align: right; color: var(--text2); }
+
+/* Buttons */
+.btn{background:var(--accent);border:none;border-radius:6px;color:#fff;padding:8px 18px;cursor:pointer;font-size:12px}
+.btn:hover{opacity:.85}
+.btn-sm{padding:4px 10px;font-size:11px}
+.btn-danger{background:var(--red)}
+.btn-success{background:var(--green)}
+.btn-warn{background:var(--warn);color:#111}
+.btn-outline{background:none;border:1px solid var(--border);color:var(--text2)}
+
+/* Status LEDs */
+.status-section {margin: 16px 0; text-align: left}
+.status-list {display: flex; flex-direction: column; gap: 10px}
+.status-item {display: flex; align-items: center; gap: 12px; color: #f1faee; font-size: 0.9rem; pointer-events: none; user-select: none}
+
+/* LED Basissicht */
+.led {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+  transition: background-color 0.3s, box-shadow 0.3s;
+}
+
+/* Zustand Rot (false) */
+.led.ledred {
+  background-color: #ff3333;
+  box-shadow: 0 0 8px #ff3333, inset 0 0 3px #ffffff;
+}
+
+/* Zustand Grün (true) */
+.led.ledgreen {
+  background-color: #00ff66;
+  box-shadow: 0 0 8px #00ff66, inset 0 0 3px #ffffff;
+}
+</style>
+</head>
+<body>
+
+  <div id="sub-settings-mqtt" class="subpage">
+    <div class="card" style="max-width:520px">
+      <div class="card-title">Energy Meter</div>
+      
+      <div class="data-row">
+        <label>Stromzähler:</label>
+        <span id="elec" class="data-value">-----.---</span>
+        <span class="data-unit">kWh</span>
+      </div>
+      <div class="data-row">
+        <label>Stromleistung:</label>
+        <span id="power" class="data-value">----</span>
+        <span class="data-unit">W</span>
+      </div>
+      <div class="data-row">
+        <label>Gasuhr:</label>
+        <span id="gas" class="data-value">-----.---</span>
+        <span class="data-unit">m³</span>
+      </div>
+      <div class="data-row">
+        <label>Wasseruhr:</label>
+        <span id="water" class="data-value">-----.---</span>
+        <span class="data-unit">m³</span>
+      </div>
+      <div class="data-row">
+        <label>Warmwasserbehälter:</label>
+        <span id="temp_ww" class="data-value">--.-</span>
+        <span class="data-unit">°C</span>
+      </div>
+      <div class="data-row">
+        <label>Warmwasser Vorlauftemperatur:</label>
+        <span id="temp_wv" class="data-value">--.-</span>
+        <span class="data-unit">°C</span>
+      </div>
+      <div class="data-row">
+        <label>Heizung Vorlauftemperatur:</label>
+        <span id="temp_vl" class="data-value">--.-</span>
+        <span class="data-unit">°C</span>
+      </div>
+      <div class="data-row">
+        <label>Heizung Rücklauftemperatur:</label>
+        <span id="temp_rl" class="data-value">--.-</span>
+        <span class="data-unit">°C</span>
+      </div>
+      <div class="data-row">
+        <label>Bibliothek Vorlauftemperatur:</label>
+        <span id="bib_vl" class="data-value">--.-</span>
+        <span class="data-unit">°C</span>
+      </div>
+      <div class="data-row">
+        <label>Bibliothek Rücklauftemperatur:</label>
+        <span id="bib_rl" class="data-value">--.-</span>
+        <span class="data-unit">°C</span>
+      </div>
+      <div class="data-row">
+        <label>Bad oben Vorlauftemperatur:</label>
+        <span id="bad_vl" class="data-value">--.-</span>
+        <span class="data-unit">°C</span>
+      </div>
+      <div class="data-row">
+        <label>Bad oben Rücklauftemperatur:</label>
+        <span id="bad_rl" class="data-value">--.-</span>
+        <span class="data-unit">°C</span>
+      </div> 
+      <div class="status-section">
+        <div class="status-list">
+          <div class="status-item"><span id="led-wifi" class="led ledred"></span><span>Wifi verbunden</span></div>
+          <div class="status-item"><span id="led-mqtt" class="led ledred"></span><span>MQTT verbunden</span></div>
+          <div class="status-item"><span id="led-eth" class="led ledred"></span><span>Ethernet verbunden</span></div>
+          <div class="status-item"><span id="led-sml" class="led ledred"></span><span>SML-Kommunikation</span></div>
+          <div class="status-item"><span id="led-water" class="led ledred"></span><span>Wasseralarm</span></div>
+        </div>
+      </div>
+
+      <div class="row"><label>Sollwert Gas</label><input type="number" step="any" id="gas_setpoint" style="width:100px"></div>
+      <div class="row"><label>Sollwert Wasser</label><input type="number" step="any" id="water_setpoint" style="width:100px"></div>
+
+      <div style="margin-top:12px"><button class="btn btn-sm" onclick="saveSetpoint()">Speichern</button></div>
+    </div>
+  </div>
+
+<script>
+
+async function api(url, opts = {}) {
+  try {
+    const r = await fetch(url, opts);
+    if (!r.ok) return null;
+    return r.json();
+  } catch(e) { return null; }
+}
+
+// Hilfsfunktion zum Setzen der LED-Klasse
+function setLedStatus(id, state) {
+  const elem = document.getElementById(id);
+  if (!elem) return;
+  if (state) {
+    elem.classList.remove('ledred');
+    elem.classList.add('ledgreen');
+  } else {
+    elem.classList.remove('ledgreen');
+    elem.classList.add('ledred');
+  }
+}
+
+async function update() {
+  try {
+    const elecElem = document.getElementById('elec');
+    const powerElem = document.getElementById('power');
+    const gasElem = document.getElementById('gas');
+    const waterElem = document.getElementById('water');
+    const temp_wwElem = document.getElementById('temp_ww');
+    const temp_vlElem = document.getElementById('temp_vl');
+    const temp_rlElem = document.getElementById('temp_rl');
+    const temp_wvElem = document.getElementById('temp_wv');
+    const temp_bib_vlElem = document.getElementById('bib_vl');
+    const temp_bib_rlElem = document.getElementById('bib_rl');
+    const temp_bad_vlElem = document.getElementById('bad_vl');
+    const temp_bad_rlElem = document.getElementById('bad_rl');
+
+    const valueData = await api('/values');
+    if (valueData) {
+      if(elecElem) elecElem.textContent = valueData.elec;
+      if(powerElem) powerElem.textContent = valueData.power;
+      if(gasElem) gasElem.textContent = valueData.gas;
+      if(waterElem) waterElem.textContent = valueData.water;
+      if(temp_wwElem) temp_wwElem.textContent = valueData.temp_ww;
+      if(temp_vlElem) temp_vlElem.textContent = valueData.temp_vl;
+      if(temp_rlElem) temp_rlElem.textContent = valueData.temp_rl;
+      if(temp_wvElem) temp_wvElem.textContent = valueData.temp_wv;
+      //if(temp_bib_vlElem) temp_bib_vlElem.textContent = valueData.temp_bib_vl;
+      //if(temp_bib_rlElem) temp_bib_rlElem.textContent = valueData.temp_bib_rl;
+      //if(temp_bad_vlElem) temp_bad_vlElem.textContent = valueData.temp_bad_vl;
+      //if(temp_bad_rlElem) temp_bad_rlElem.textContent = valueData.temp_bad_rl;
+    }
+  } catch(e) {}
+
+  try {
+    const statusData = await api('/status');
+    if (statusData) {
+      setLedStatus('led-wifi', statusData.wifi);
+      setLedStatus('led-mqtt', statusData.mqtt);
+      setLedStatus('led-eth', statusData.eth);
+      setLedStatus('led-sml', statusData.sml);
+      setLedStatus('led-water', statusData.waterAlarm);
+    }
+  } catch(e) {}
+}
+
+update();
+setInterval(update, 10000);
+
+async function saveSetpoint() {
+
+  const gasVal = document.getElementById('gas_setpoint').value.replace(',', '.');
+  const waterVal = document.getElementById('water_setpoint').value.replace(',', '.');
+
+  const body = { setpoint: {
+    gas: parseFloat(gasVal) || 0.0,
+    water: parseFloat(waterVal) || 0.0,
+  }};
+  const r = await api('/setpoint', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+}
+</script>
+</body>
+</html>
