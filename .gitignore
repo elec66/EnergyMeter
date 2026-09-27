@@ -6,5 +6,5 @@
 .vscode/launch.json
 .vscode/ipch
 compile_commands.json
-include/config.h
+include/secrets.h
 

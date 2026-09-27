@@ -25,6 +25,7 @@
 #include <atomic>
 #include "esp_log.h"
 #include "config.h"
+#include "secrets.h"
 
 struct WiFiConfig
 {

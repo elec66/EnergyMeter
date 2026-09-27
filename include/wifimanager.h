@@ -2,9 +2,10 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
-#include <config.h>
 #include <atomic>
 #include <cstdint>
+#include "config.h"
+#include "secrets.h"
 
 struct WiFiConfig
 {
