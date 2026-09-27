@@ -1,4 +1,4 @@
-Electricity Meter:
+<u>Electricity Meter:</u>
 
 An ISKRA MT681 meter, equipped with the Smart Meter Language (SML)
 protocol, is used to measure electricity. The meter outputs data such as
