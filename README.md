@@ -1,5 +1,6 @@
 Electricity
-Meter:![](Pictures/100000000000019000000227B54563D1.png)
+Meter:
+<img src="Pictures/100000000000019000000227B54563D1.png" alt="Electricity Meter" width="300">
 
 An ISKRA MT681 meter, equipped with the Smart Meter Language (SML)
 protocol, is used to measure electricity. The meter outputs data such as
