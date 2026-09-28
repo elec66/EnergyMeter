@@ -1,19 +1,7 @@
 /***************************************************************************
-  Copyright (c) 2026 Thorsten Heins
+  Water Manager:
 
-  This file is a part of the "ESP32-SML-Reader" source code.
-    
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-   
-  http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
+ The Water Manager handles the water meter reading (via IR diodes) and the calculation of water consumption.
 
 ***************************************************************************/
 
@@ -22,8 +10,6 @@
 
 extern MqttManager mqtt ; 
 extern WebManager web ; 
-
-// Definition der statischen Variablen
 
 float Water::lastWasserVal = 0.0f; // (or uint32_t / float depending on how it's declared in watercounter.h)
 
@@ -36,7 +22,7 @@ Water::Water() {
 // Initialization
 // =============================================================================
 void Water::init() {
-   _pref.begin("water", false);
+  _pref.begin("water", false);
   _water_consumption = getWaterCounter();
   AsyncWebServer& server = web.getServer();
   analogReadResolution(12);  
@@ -50,7 +36,6 @@ void Water::init() {
 // =============================================================================
 void Water::loop() {
 
-  // Eingänge einlesen
   bool watercounterpin_1 = readPIN1();
   bool watercounterpin_2 = readPIN2();
 
@@ -60,7 +45,6 @@ void Water::loop() {
     case STATUS_0:
       if (watercounterpin_1 == LOW && watercounterpin_2 == HIGH) {
         current_status = STATUS_1;
-        //Serial.printf("T0 erreicht: Eingang 1 ist %d, Eingang 2 ist %d\n",watercounterpin_1, watercounterpin_2);
       }
       break;
 
@@ -68,7 +52,6 @@ void Water::loop() {
     case STATUS_1:
       if (watercounterpin_1 == LOW && watercounterpin_2 == LOW) {
         current_status = STATUS_2;
-        //Serial.printf("T1 erreicht: Eingang 1 ist %d, Eingang 2 ist %d\n",watercounterpin_1, watercounterpin_2);
       } else if (watercounterpin_1 == HIGH) {
          ESP_LOGW(TAG, "Fehler bei T1: Eingang 1 ist %d, Eingang 2 ist %d\n",watercounterpin_1, watercounterpin_2);
         current_status = STATUS_0;
@@ -79,7 +62,6 @@ void Water::loop() {
     case STATUS_2:
       if (watercounterpin_1 == HIGH && watercounterpin_2 == LOW) {
         current_status = STATUS_3;
-        //Serial.printf("T2 erreicht: Eingang 1 ist %d, Eingang 2 ist %d\n",watercounterpin_1, watercounterpin_2);
       } else if (watercounterpin_2 == HIGH) {
          ESP_LOGW(TAG, "Fehler bei T2: Eingang 1 ist %d, Eingang 2 ist %d\n",watercounterpin_1, watercounterpin_2);
         current_status = STATUS_0;
@@ -89,7 +71,6 @@ void Water::loop() {
     // T3: Waiting for I2 to switch from 0 back to 1 as well.
     case STATUS_3:
       if (watercounterpin_1 == HIGH && watercounterpin_2 == HIGH) {
-        //Serial.printf("T3 erreicht: Eingang 1 ist %d, Eingang 2 ist %d\n",watercounterpin_1, watercounterpin_2);
         _water_consumption = _water_consumption + 1;
         ESP_LOGI(TAG, "new water tick: %u liter", _water_consumption);
         _pref.putLong("Watercounter", _water_consumption);                
@@ -109,59 +90,56 @@ void Water::loop() {
 void Water::checkWaterLeakage() {
   uint32_t now = millis();
 
-  // 1. Erkennen, ob die Variable "wasser" erhöht wurde
+  // 1. Detect whether the variable "wasser" has been incremented.
   if (_water_consumption > lastWasserVal) {
     // Falls mehr als +1 auf einmal verarbeitet wird, den Stand anpassen
     uint32_t delta = _water_consumption - lastWasserVal; 
     lastWasserVal = _water_consumption;
-    //WebSerial.printf("Wasser läuft");
+
 
     if (lastIncrementTime > 0) {
-      // Zeitabstand zur letzten Erhöhung berechnen
+      // Calculate the time elapsed since the last increase
       uint32_t interval = (now - lastIncrementTime) / delta;
        ESP_LOGD(TAG, "Wasserleckage Interval:  %u", interval);
 
-      // In Ringpuffer eintragen
+      // Enter in ring buffer
       intervals[intervalIndex] = interval;
       intervalIndex = (intervalIndex + 1) % BUFFER_SIZE;
       if (intervalCount < BUFFER_SIZE) intervalCount++;
  
-      // Gleichmäßigkeit überprüfen
+      // Check for uniformity
       float stdDev = this->calculateStdDev();
       ESP_LOGD(TAG, "Wasserleckage StdDev:  %.3f", stdDev);
       bool isRegular = (stdDev <= MAX_STD_DEV_MS);
 
       if (isRegular) {
         if (!trackingActive) {
-          // Gleichmäßiger Fluss startet
+          // Steady flow begins
           trackingActive = true;
           regularStartTime = now;
           Serial.println("[INFO] Gleichmäßiger Wasserfluss erkannt. 10-Minuten-Timer gestartet.");
-          //WebSerial.printf("Gleichmäßiger Wasserfluss erkannt. 10-Minuten-Timer gestartet.");
         }
       } else {
         if (trackingActive) {
-          // Unregelmäßigkeit (z. B. normaler Verbrauch) -> Überwachung zurücksetzen
+          // Irregularity (e.g., normal consumption) -> Reset monitoring
           trackingActive = false;
           alarmTriggered = false;
           Serial.println("[INFO] Schwankung im Durchfluss erkannt. Timer zurückgesetzt.");
-          //WebSerial.printf("Schwankung im Durchfluss erkannt. Timer zurückgesetzt.");
         }
       }
     }
     lastIncrementTime = now;
   }
 
-  // 2. Timeout Check: Falls die Variable lange Zeit nicht mehr erhöht wird (Fluss gestoppt)
+  // 2. Timeout check: If the variable is not incremented for a prolonged period (flow stopped)
   if (trackingActive && (lastIncrementTime > 0) && (now - lastIncrementTime > TIMEOUT_MS)) {
     trackingActive = false;
     alarmTriggered = false;
-    Serial.println("[INFO] Kein Wasserfluß innerhalb TIMEOUT. Überwachung zurückgesetzt.");
-    //WebSerial.printf("Kein Wasserfluß innerhalb TIMEOUT. Überwachung zurückgesetzt..");
+    ESP_LOGI(TAG, "No water flow within timeout period. Monitoring reset.");
     mqtt.publish("ESP/Energie/Wasser/Alarm", "OFF");
   }
 
-  // 3. Alarm Check: Bei 10 Minuten durchgehendem, regelmäßigen Fluss
+  // 3. Alarm Check: After 10 minutes of continuous, regular flow
   if (trackingActive && !alarmTriggered) {
     if (now - regularStartTime >= ALARM_INTERVAL_MS) {
       alarmTriggered = true;
@@ -175,10 +153,7 @@ void Water::checkWaterLeakage() {
 // trigger water leckage alarm
 // =============================================================================
 void Water::triggerAlarm() {
-  Serial.println("\n===================================================");
-  Serial.println(" ALARM: Leckage vermutet! Konstanter Wasserfluss ");
-  Serial.println(" über mehr als 10 Minuten festgestellt!           ");
-  Serial.println("===================================================\n");
+  ESP_LOGI(TAG, "ALARM: Leak suspected! Constant water flow.");
   mqtt.publish("ESP/Energie/Wasser/Alarm", "ON");
 }  
 
@@ -250,7 +225,7 @@ float Water::calculateStdDev() {
 
 
 // =============================================================================
-// Reas analog pin
+// Read analog pin
 // =============================================================================
 bool Water::readPIN1() {
   int rawValue = analogRead(WATER_INPUT_PIN_1);
@@ -258,12 +233,10 @@ bool Water::readPIN1() {
   if (rawValue > max_analog_pin_1) {
     if (currentState1 != true) {
       currentState1 = true;
-      //Serial.printf("Pin 1 = 1\n");
     }
   } else if (rawValue < min_analog_pin_1) {
     if (currentState1 != false) {
       currentState1 = false;
-      //Serial.printf("Pin 1 = 0\n");
     }
   }
   return currentState1;
@@ -271,16 +244,13 @@ bool Water::readPIN1() {
 
 bool Water::readPIN2() {
   int rawValue = analogRead(WATER_INPUT_PIN_2);
-  //Serial.printf(", Analogwert von Pin 2, %d\n", rawValue);
   if (rawValue > max_analog_pin_2) {
     if (currentState2 != true) {
       currentState2 = true;
-      //Serial.printf("Pin 2 = 1\n");
     }
   } else if (rawValue < min_analog_pin_2) {
     if (currentState2 != false) {
       currentState2 = false;
-      //Serial.printf("Pin 2 = 0\n");
     }
   }
   return currentState2;

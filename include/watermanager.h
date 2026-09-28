@@ -2,7 +2,6 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
-//#include <WebSerial.h>
 #include "config.h"
 #include "mqttmanager.h"
 

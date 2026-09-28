@@ -2,7 +2,6 @@
 
 #include <Arduino.h>
 #include <TaskSchedulerDeclarations.h>
-#include <WebSerial.h>
 #include "esp_log.h"
 
 struct Manufacturer

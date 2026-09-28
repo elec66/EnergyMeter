@@ -1,28 +1,10 @@
 /***************************************************************************
-  Copyright (c) 2026 Thorsten Heins
+  Web Manager:
 
-  This file a part of the "EnergyMeter" source code.
-
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-  http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  index.html:
-  1) platformio.ini: board_build.filesystem = littlefs
-  2) Platziere die index.html im Ordner data/ des PlatformIO-Projekts (/data/index.html).
-  3) Wähle Platform -> Build Filesystem Image.
-  4) Wähle anschließend Platform -> Upload Filesystem Image.
+  The Web Manager organizes all web-related functions and connections.
 
 ***************************************************************************/
-#include <ArduinoJson.h> // Wichtig: ArduinoJson Header muss eingebunden sein
+#include <ArduinoJson.h> 
 #include "webmanager.h"
 #include "watermanager.h"
 
@@ -30,7 +12,7 @@ extern Water water;
 extern Gas gas; 
 extern Sml sml;
 extern MqttManager mqtt;
-extern EthManager eth;
+extern ETHManager eth;
 extern DS18B20Manager temperature;
 
 
@@ -60,7 +42,10 @@ void WebManager::setupWS() {
     _server.addHandler(&_ws);
 }
 
+
+// =============================================================================
 // When a web client successfully connects via the WebSocket address /ws.
+// =============================================================================
 void WebManager::onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client,
                        AwsEventType type, void* arg, uint8_t* data, size_t len) {
     if (type == WS_EVT_CONNECT) {
@@ -171,6 +156,7 @@ void WebManager::setupRoutes() {
     );
 }
 
+
 uint32_t WebManager::floatToScaledInt(double input) {
   return static_cast<int32_t>(std::round(input * 1000.0));
 }
@@ -183,25 +169,25 @@ AsyncWebServer& WebManager::getServer() {
 
 void WebManager::onOTAStart() {
   // Log when OTA has started
-  Serial.println("OTA update started!");
-  // <Add your own code here>
+  ESP_LOGI(TAG, "OTA update started!");
 }
+
 
 void WebManager::onOTAProgress(size_t current, size_t final) {
   // Log every 1 second
   if (millis() - ota_progress_millis > 1000) {
     ota_progress_millis = millis();
-    Serial.printf("OTA Progress Current: %u bytes, Final: %u bytes\n", current, final);
+    ESP_LOGI(TAG, "OTA Progress Current: %u bytes, Final: %u bytes\n", current, final);
   }
 }
+
 
 void WebManager::onOTAEnd(bool success) {
   // Log when OTA has finished
   if (success) {
-    Serial.println("OTA update finished successfully!");
+    ESP_LOGI(TAG, "OTA update finished successfully!");
   } else {
-    Serial.println("There was an error during OTA update!");
+    ESP_LOGE(TAG, "There was an error during OTA update!");
   }
-  // <Add your own code here>
 }
   

@@ -7,7 +7,7 @@
 
 #include "mqttmanager.h"
 
-extern EthManager eth; 
+extern ETHManager eth; 
 
 // =============================================================================
 // Constructor

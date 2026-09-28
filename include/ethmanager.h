@@ -1,147 +1,77 @@
-
 #pragma once
 
 #include <Arduino.h>
-#include <WiFi.h>
+#include <SPI.h>
 #include <ETH.h>
-#include <LittleFS.h>  
-#include <atomic>
-#include "esp_log.h"
+#include <WiFi.h>
 #include "config.h"
 #include "secrets.h"
 
-struct WiFiConfig
-{
-    const char* ssid;
-    const char* password;
-    const char* hostname;
-
-    uint32_t connectTimeoutMs = 15000;
-    uint32_t reconnectIntervalMs = 5000;
-
-    bool autoReconnect = true;
-    bool persistent = false;
+enum class NetworkModus {
+  NONE,
+  ETH,
+  WIFI
 };
 
-inline constexpr WiFiConfig wifiConfig{
+struct ETHManagerConfig {
+  const char* ssid;
+  const char* password;
+  const char* hostname;
+  int csPin = W5500_CS_PIN;
+  int rstPin = W5500_RST_PIN;
+  int intPin = W5500_INT_PIN;
+  int sclkPin = W5500_SCK_PIN;
+  int misoPin = W5500_MISO_PIN;
+  int mosiPin = W5500_MOSI_PIN;
+  unsigned long ethTimeoutMs = 5000;
+  unsigned long wifiTimeoutMs = 15000;
+  unsigned long reconnectIntervalMs = 5000; // Intervall für Reconnect-Versuche in loop()
+};
+
+inline constexpr ETHManagerConfig wifiConfig{
     .ssid = WIFI_SSID,
-    .password = PW,
+    .password = WIFI_PW,
     .hostname = HOSTNAME,
-
-    .connectTimeoutMs = 15000,
+    .ethTimeoutMs = 15000,
     .reconnectIntervalMs = 5000,
-
-    .autoReconnect = true,
-    .persistent = false
 };
 
-class EthManager
-{
+
+
+class ETHManager {
 public:
+  explicit ETHManager(const ETHManagerConfig& config);
+  
+  // Initialisiert Harware & versucht Erstverbindung
+  bool init();
 
-    enum class State : uint8_t
-    {
-        Idle = 0,
-        Connecting,
-        Connected,
-        Disconnected,
-        Error
-    };
-
-
-public:
-
-    explicit EthManager(const WiFiConfig& config);
-
-    ~EthManager();
-
-    void init();
-    bool wifiBegin();
-    void loop();
-    void stop();
-
-    State state() const;
-
-    bool isConnected();
-    bool isConnecting() const;
-    bool hasError() const;
-
-    IPAddress localIP() const;
-
-    IPAddress gatewayIP() const;
-
-    IPAddress subnetMask() const;
-
-    IPAddress dnsIP() const;
-
-    int32_t rssi() const;
-
-    String ssid() const;
-
-    String macAddress() const;
-
-    const char* hostname() const;
-
-    uint8_t disconnectReason() const;
-
-    const char* disconnectReasonText() const;
-
-    void reconnect();
-
-    void disconnect();
-
+  // MUSS regelmäßig in der Hauptschleife (loop()) aufgerufen werden!
+  void tick();
+  
+  // Statusabfragen
+  bool isConnected() const;
+  NetworkModus getActiveInterface() const;
+  IPAddress getLocalIP() const;
 
 private:
+  ETHManagerConfig _config;
+  NetworkModus _activeInterface = NetworkModus::NONE;
+  static constexpr const char* TAG = "ETH";
+  
+  static bool _ethConnected;
+  bool _ethHardwareInitialized = false;
+  unsigned long _lastReconnectAttempt = 0;
 
-    static void eventHandler(
-        arduino_event_id_t event,
-        arduino_event_info_t info
-    );
+  // Event-Callbacks
+  static void onETHConnected(WiFiEvent_t event, WiFiEventInfo_t info);
+  static void onETHGotIP(WiFiEvent_t event, WiFiEventInfo_t info);
+  static void onETHDisconnected(WiFiEvent_t event, WiFiEventInfo_t info);
+  static void onWIFIConnected(WiFiEvent_t event, WiFiEventInfo_t info);
+  static void onWIFIGotIP(WiFiEvent_t event, WiFiEventInfo_t info);
 
-    void handleEvent(
-        arduino_event_id_t event,
-        arduino_event_info_t info
-    );
-
-
-    void startConnection();
-
-    void handleConnecting();
-
-    void handleDisconnected();
-
-    static const char* disconnectReasonToString(
-        uint8_t reason
-    );
-
-
-private:
-
-    WiFiConfig _config;
-    static constexpr const char* TAG = "ETH";
-
-    // -------------------------------------------------------------------------
-    // State
-    //
-    // Events are executed from a different FreeRTOS task than loop().
-    // Therefore state is atomic.
-    // -------------------------------------------------------------------------
-
-    std::atomic<State> _state {
-        State::Idle
-    };
-
-    std::atomic<uint8_t> _disconnectReason {
-        0
-    };
-
-    uint32_t _connectStartedAt = 0;
-    uint32_t _lastReconnectAttempt = 0;
-
-    WiFiEventId_t _eventId = 0;
-    bool _eventRegistered = false;
-    bool _started = false;
-    bool _ethConnected = false;
-
-    static EthManager* _instance;
+  bool initEthernetHardware();
+  bool connectEthernetBlocking();
+  bool startWiFiConnection();
+  void disconnectWiFi();
 };
+

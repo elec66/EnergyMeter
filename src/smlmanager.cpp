@@ -1,20 +1,8 @@
 /***************************************************************************
-  Copyright (c) 2026 Thorsten Heins
+  sml Manager:
 
-  This file a part of the "ESP32-SML-Reader" source code.
-
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-  http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
+ The sml Manager handles the sml meter reading (via IR diode) and the calculation of current consumption.
+ 
 ***************************************************************************/
 
 #include "smlmanager.h"
@@ -37,10 +25,11 @@ void Sml::init() {
   SMLSerial.begin(BAUDRATE, SERIAL_8N1, SML_RX_PIN, SML_TX_PIN);
   lastByteTime = millis();
   AsyncWebServer& server = web.getServer();
-  WebSerial.begin(&server); 
 }
 
-// check serialport
+// =============================================================================
+// Manage UART serial connection
+// =============================================================================
 void Sml::loop() {
    // read SML-data from RX serial buffer to RAM buffer
     while (SMLSerial.available() > 0) {
@@ -88,7 +77,6 @@ int64_t Sml::readObis16_7_0(){
   return _power;
 };
 
-
 String Sml::readManufacturerName(){
  return this->getManufacturerName(manufacturer).c_str();
 };
@@ -135,9 +123,10 @@ void Sml::setDailyElecConsumption(uint32_t value) {
   _daily_elec_consumption = value;  
 }
 
-// Verarbeitung des Puffers
+// =============================================================================
+// Process buffer
+// =============================================================================
 void Sml::processBuffer(const uint8_t* buffer, size_t length) {
-  //Serial.printf("\n--- SML-Paket empfangen! Länge: %d Bytes ---\n", length);
 
   // OBIS sequences
   uint8_t* match_obis170 = (uint8_t*) memmem(buffer, length, obis170, sizeof(obis170));
@@ -152,154 +141,146 @@ void Sml::processBuffer(const uint8_t* buffer, size_t length) {
 
   // Check if valid SML protocol received
   if ((match_startsequenz != nullptr) and (match_endsequenz != nullptr)){
-    //Serial.printf("Valid SML OBIS protocol received\n");
     
     // ---------------------------------------------------------
     // 1.8.0 - Positive active energy
     // ---------------------------------------------------------
     if (match_obis180 != nullptr) {
       size_t index = match_obis180 - buffer; 
-      //Serial.printf("Muster OBIS 1.8.0 an Position %d gefunden!\n", index);
       _consumption = this->readSMLType59(buffer, index+17);
-      //Serial.printf("Consumption: %llu Wh\n", consumption);
     }  
+
     // ---------------------------------------------------------
     // 1.8.1 - Positive active energy tariff 1
     // ---------------------------------------------------------
     if (match_obis181 != nullptr) {
       size_t index = match_obis181 - buffer; 
-      //Serial.printf("Muster OBIS 1.8.1 an Position %d gefunden!\n", index);
       _consumptionT1 = this->readSMLType59(buffer, index+13);
-      //Serial.printf("Consumption tariff 1: %llu Wh\n", consumptionT1);
     }  
+
     // ---------------------------------------------------------
     // 1.8.2 - Positive active energy tariff 2
     // ---------------------------------------------------------
     if (match_obis182 != nullptr) {
       size_t index = match_obis182 - buffer; 
-      //Serial.printf("Muster OBIS 1.8.2 an Position %d gefunden!\n", index);
       _consumptionT2 = this->readSMLType59(buffer, index+13);
-      //Serial.printf("Consumption tariff 2: %llu Wh\n", consumptionT2);
     }  
+
     // ---------------------------------------------------------
     // 2.8.0 - Negative active energy
     // ---------------------------------------------------------   
     if (match_obis280 != nullptr) {
       size_t index = match_obis280 - buffer; 
-      WebSerial.printf("Muster OBIS 2.8.0 an Position %d gefunden!\n", index);
     } 
+
     // ---------------------------------------------------------
     // 16.7.0 - Sum active instantaneous power
     // ---------------------------------------------------------
     if (match_obis1670 != nullptr) {
       size_t index = match_obis1670 - buffer; 
-      //Serial.printf("Muster OBIS 16.7.0 an Position %d gefunden!\n", index);
       if (buffer[index+13] == 255){
-         _power = this->readSMLType55(buffer, index+13);
-         ESP_LOGD(TAG,"Wertnegativ, vor Abzug: %d", _power);
-         _power = _power - 4294967296;
-         ESP_LOGD(TAG,"Wert nach Abzug: %d", _power);
-
+        _power = this->readSMLType55(buffer, index+13);
+        ESP_LOGD(TAG,"Wertnegativ, vor Abzug: %d", _power);
+        _power = _power - 4294967296;
+        ESP_LOGD(TAG,"Wert nach Abzug: %d", _power);
       } else{
-         ESP_LOGD(TAG,"Wert ist negativ");
-         _power = this->readSMLType55(buffer, index+13);
+        ESP_LOGD(TAG,"Wert ist negativ");
+        _power = this->readSMLType55(buffer, index+13);
       }
-      //Serial.printf("Power: %llu W\n", power);
     } 
+
     // ---------------------------------------------------------
-    // 0.0.9 - Zählernummer
+    // 0.0.9 - id-no of counter
     // ---------------------------------------------------------
     if (match_device_no != nullptr) {
-      size_t index = match_device_no - buffer; // Index im Puffer berechnen
-      //Serial.printf("Seriennummer an Position %d gefunden!\n", index);
+      size_t index = match_device_no - buffer; 
       manufacturer = this->manufacturerToASCII(buffer, index+13);
-      //Serial.printf("Manufacturer: %s\n", this->getManufacturerName(manufacturer).c_str());
       serial_no = this->readSMLType56(buffer, index+16);
-      //Serial.printf("Serial-Number: %s00%llu\n", manufacturer.c_str(), serial_no);
     } 
   }
 }
 
+// =============================================================================
+// Helper functions
+// =============================================================================
 
 // calculate value of SML-typ 55 (integer 32 bit) 
 uint64_t Sml::readSMLType55(const uint8_t* data, size_t pos)
 {
-    return ((uint64_t)data[pos] << 24) |
-           ((uint64_t)data[pos + 1] << 16) |
-           ((uint64_t)data[pos + 2] << 8)  |
-           ((uint64_t)data[pos + 3]);
+  return ((uint64_t)data[pos] << 24) |
+         ((uint64_t)data[pos + 1] << 16) |
+         ((uint64_t)data[pos + 2] << 8)  |
+         ((uint64_t)data[pos + 3]);
 }
 
 
 // calculate value of SML-typ 56 (integer 40 bit) 
 uint64_t Sml::readSMLType56(const uint8_t* data, size_t pos)
 {
-    return ((uint64_t)data[pos] << 32) |
-           ((uint64_t)data[pos + 1] << 24) |
-           ((uint64_t)data[pos + 2] << 16) |
-           ((uint64_t)data[pos + 3] << 8)  |
-           ((uint64_t)data[pos + 4]);
+  return ((uint64_t)data[pos] << 32) |
+         ((uint64_t)data[pos + 1] << 24) |
+         ((uint64_t)data[pos + 2] << 16) |
+         ((uint64_t)data[pos + 3] << 8)  |
+         ((uint64_t)data[pos + 4]);
 }
 
 
 // calculate value of SML-typ 57 (integer 48 bit) 
 uint64_t Sml::readSMLType57(const uint8_t* data, size_t pos)
 {
-    return ((uint64_t)data[pos] << 40) |
-           ((uint64_t)data[pos + 1] << 32) |
-           ((uint64_t)data[pos + 2] << 24) |
-           ((uint64_t)data[pos + 3] << 16) |
-           ((uint64_t)data[pos + 4] << 8)  |
-           ((uint64_t)data[pos + 5]);
+  return ((uint64_t)data[pos] << 40) |
+         ((uint64_t)data[pos + 1] << 32) |
+         ((uint64_t)data[pos + 2] << 24) |
+         ((uint64_t)data[pos + 3] << 16) |
+         ((uint64_t)data[pos + 4] << 8)  |
+         ((uint64_t)data[pos + 5]);
 }
 
 
 // calculate value of SML-typ 58 (integer 56 bit) 
 uint64_t Sml::readSMLType58(const uint8_t* data, size_t pos)
 {
-    return ((uint64_t)data[pos] << 48) |
-           ((uint64_t)data[pos + 1] << 40) |
-           ((uint64_t)data[pos + 2] << 32) |
-           ((uint64_t)data[pos + 3] << 24) |
-           ((uint64_t)data[pos + 4] << 16) |
-           ((uint64_t)data[pos + 5] << 8)  |
-           ((uint64_t)data[pos + 6]);
+  return ((uint64_t)data[pos] << 48) |
+         ((uint64_t)data[pos + 1] << 40) |
+         ((uint64_t)data[pos + 2] << 32) |
+         ((uint64_t)data[pos + 3] << 24) |
+         ((uint64_t)data[pos + 4] << 16) |
+         ((uint64_t)data[pos + 5] << 8)  |
+         ((uint64_t)data[pos + 6]);
 }
 
 
 // calculate value of SML-typ 59 (integer 64 bit) 
 uint64_t Sml::readSMLType59(const uint8_t* data, size_t pos)
 {
-    return ((uint64_t)data[pos]     << 56) |
-           ((uint64_t)data[pos + 1] << 48) |
-           ((uint64_t)data[pos + 2] << 40) |
-           ((uint64_t)data[pos + 3] << 32) |
-           ((uint64_t)data[pos + 4] << 24) |
-           ((uint64_t)data[pos + 5] << 16) |
-           ((uint64_t)data[pos + 6] << 8)  |
-           ((uint64_t)data[pos + 7]);
+  return ((uint64_t)data[pos]     << 56) |
+         ((uint64_t)data[pos + 1] << 48) |
+         ((uint64_t)data[pos + 2] << 40) |
+         ((uint64_t)data[pos + 3] << 32) |
+         ((uint64_t)data[pos + 4] << 24) |
+         ((uint64_t)data[pos + 5] << 16) |
+         ((uint64_t)data[pos + 6] << 8)  |
+         ((uint64_t)data[pos + 7]);
 }
 
 
 String Sml::manufacturerToASCII(const uint8_t* data, size_t pos)
 {
-    return String((char)data[pos]) +
-           String((char)data[pos + 1]) +
-           String((char)data[pos + 2]);
+  return String((char)data[pos]) +
+         String((char)data[pos + 1]) +
+         String((char)data[pos + 2]);
 }
 
 
 
 String Sml::getManufacturerName(const String& code)
 {
-    for (size_t i = 0; i < manufacturerCount; i++)
+  for (size_t i = 0; i < manufacturerCount; i++)
     {
-        if (code == manufacturers[i].code)
-        {
-            return String(manufacturers[i].name);
-        }
+      if (code == manufacturers[i].code){
+          return String(manufacturers[i].name);
+      }
     }
-
-    return "Unknown";
+  return "Unknown";
 }
 
