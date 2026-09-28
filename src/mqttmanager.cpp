@@ -1,19 +1,7 @@
 /***************************************************************************
-  Copyright (c) 2026 Thorsten Heins
+  MQTT Manager:
 
-  This file a part of the "EnergyMeter" source code.
-
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-  http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
+  The MQTT Manager organizes all MQTT functions and connections.
 
 ***************************************************************************/
 
@@ -25,39 +13,31 @@ extern EthManager eth;
 // Constructor
 // =============================================================================
 MqttManager::MqttManager() {
-    esp_log_level_set(TAG, ESP_LOG_DEBUG);
+  esp_log_level_set(TAG, ESP_LOG_DEBUG);
 }
-
-
-// =============================================================================
-// Destructor
-// =============================================================================
-MqttManager::~MqttManager(){
-}
-
 
 // =============================================================================
 // Set dafault values
 // =============================================================================
 void MqttManager::init() {
   mqttClient.onConnect([this](bool sessionPresent) {
-        this->onMqttConnect(sessionPresent);
-    });
+    this->onMqttConnect(sessionPresent);
+  });
   mqttClient.onDisconnect([this](espMqttClientTypes::DisconnectReason reason) {
-        this->onMqttDisconnect(reason);
-    });
+    this->onMqttDisconnect(reason);
+  });
   mqttClient.onSubscribe([this](uint16_t packetId, const espMqttClientTypes::SubscribeReturncode* codes, size_t len) {
-        this->onMqttSubscribe(packetId, codes, len);
-    });
+    this->onMqttSubscribe(packetId, codes, len);
+  });
   mqttClient.onUnsubscribe([this](uint16_t packetId) {
-        this->onMqttUnsubscribe(packetId);
-    });
+    this->onMqttUnsubscribe(packetId);
+  });
   mqttClient.onMessage([this](const espMqttClientTypes::MessageProperties& properties, const char* topic, const uint8_t* payload, size_t len, size_t index, size_t total) {
-        this->onMqttMessage(properties, topic, payload, len, index, total);
-    });
+    this->onMqttMessage(properties, topic, payload, len, index, total);
+  });
   mqttClient.onPublish([this](uint16_t packetId) {
-        this->onMqttPublish(packetId);
-    });
+    this->onMqttPublish(packetId);
+  });
   mqttClient.setCredentials(MQTT_USER, MQTT_PW);
   mqttClient.setServer(MQTT_SERVER, MQTT_PORT);   
 }

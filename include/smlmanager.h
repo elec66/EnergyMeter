@@ -1,25 +1,4 @@
-/***************************************************************************
-  Copyright (c) 2026 Thorsten Heins
-
-  This file a part of the "ESP32-SML-Reader" source code.
-    
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-   
-  http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-***************************************************************************/
 #pragma once
-
-#ifndef _SMLPARSER_H
-#define _SMLPARSER_H
 
 #include <Arduino.h>
 #include <TaskSchedulerDeclarations.h>
@@ -60,7 +39,6 @@ const Manufacturer manufacturers[] =
 class Sml {
 public:
 
-// constructors and destructor  
 Sml();
   ~Sml() {}  
 
@@ -110,17 +88,17 @@ unsigned long lastByteTime = 0;
 bool _is_connected = false;
 
 //https://www.promotic.eu/en/pmdoc/Subsystems/Comm/PmDrivers/PmIEC62056/IEC62056_OBIS.htm
-// OBIS1.7.0: Aktuelle Wirkleistung / Positive active instantaneous power (A+) [kW]
+// OBIS1.7.0: Positive active instantaneous power (A+) [kW]
 static constexpr uint8_t obis170[]  = {0x01, 0x00, 0x01, 0x07, 0x00, 0xff};   
-// OBIS1.8.0: Zählerstand Bezug / Positive active energy (A+) total [kWh]
+// OBIS1.8.0: Positive active energy (A+) total [kWh]
 static constexpr uint8_t obis180[]  = {0x01, 0x00, 0x01, 0x08, 0x00, 0xff};   
-// OBIS1.8.1: Zählerstand Bezug (Tarif 1) / Positive active energy (A+) in tariff T1 [kWh]
+// OBIS1.8.1: Positive active energy (A+) in tariff T1 [kWh]
 static constexpr uint8_t obis181[]  = {0x01, 0x00, 0x01, 0x08, 0x01, 0xff};   
-// OBIS1.8.2: Zählerstand Bezug (Tarif 2) / Positive active energy (A+) in tariff T2 [kWh]
+// OBIS1.8.2: Active energy (A+) in tariff T2 [kWh]
 static constexpr uint8_t obis182[]  = {0x01, 0x00, 0x01, 0x08, 0x02, 0xff};   
-// OBIS2.8.0: Zählerstand Einspeisung  / Negative active energy (A+) total [kWh]
+// OBIS2.8.0: Negative active energy (A+) total [kWh]
 static constexpr uint8_t obis280[]  = {0x01, 0x00, 0x02, 0x08, 0x00, 0xff};  
-// OBIS16.7.0: Aktuelle Wirkleistung /`Sum active instantaneous power (A+ - A-) [kW]
+// OBIS16.7.0: Sum active instantaneous power (A+ - A-) [kW]
 static constexpr uint8_t obis1670[] = {0x01, 0x00, 0x10, 0x07, 0x00, 0xff};  
 //
 static constexpr uint8_t startsequenz[] = {0x1B, 0x1B, 0x1B, 0x1B, 0x01, 0x01, 0x01, 0x01};  
@@ -132,4 +110,3 @@ static constexpr uint8_t device_no[] = {0x01, 0x00, 0x00, 0x00, 0x09, 0xff};
 protected:
 
 };
-#endif

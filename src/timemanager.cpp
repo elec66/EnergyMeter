@@ -32,8 +32,6 @@ TimeManager::TimeManager() {
   esp_log_level_set(TAG, ESP_LOG_DEBUG);
 }
 
-TimeManager::~TimeManager() {}
-
 
 // =============================================================================
 // Initialization
